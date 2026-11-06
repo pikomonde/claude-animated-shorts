@@ -53,6 +53,12 @@ export class Pool {
       for (const r of rs) r.tex = e.tex;
     }
     this.reqs = [];
+    while (this.free.length > 20) {
+      const dead = this.free.pop();
+      if (dead) {
+        try { dead.tex.dispose(); } catch {}
+      }
+    }
   }
 }
 

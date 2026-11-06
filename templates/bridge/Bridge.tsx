@@ -29,11 +29,11 @@ const toggles = (): PostToggles => ({ ink: true, lens: true, pre: true, bloom: t
 /** Bloom for emissive sources only (depth.md 6.4). Its MIP chain always starts at 540x960 (half of 1080x1920),
  *  whatever the output size, so the glow keeps the same size relative to the frame (e-fold ~30 px at 1080p,
  *  ~1.5 % of the frame height) at 540, 1080 and 1440 widths. ADD blend: HDR-safe (SCREEN darkens values > 1). */
-const makeBloom = () => {
-  const b = new BloomEffect({ blendFunction: BlendFunction.ADD, intensity: 0.5, luminanceThreshold: 1.0, luminanceSmoothing: 0.2, mipmapBlur: true, levels: 6, radius: 0.6 });
+const makeBloom = (hTarget = 1280) => {
+  const b = new BloomEffect({ blendFunction: BlendFunction.ADD, intensity: 0.5, luminanceThreshold: 1.0, luminanceSmoothing: 0.2, mipmapBlur: true, levels: 4, radius: 0.6 });
   const mip = b.mipmapBlurPass;
   const setSize = mip.setSize.bind(mip);
-  mip.setSize = (w: number, h: number) => setSize(Math.round((1920 * w) / Math.max(h, 1)), 1920);
+  mip.setSize = (w: number, h: number) => setSize(Math.round((hTarget * w) / Math.max(h, 1)), hTarget);
   return b;
 };
 
@@ -60,9 +60,13 @@ const Inner: React.FC<{ id: number; kit: Kit }> = ({ id, kit }) => {
     grade: new GradeEffect(GRADES.day, GRADE_STRENGTH.day),
     grain: new GrainEffect({ amount: 0.025, cellPx: 1.5 }), // film grain, OFF by default (inputProps post.grain): the reference measures no grain and it quadruples the file size
   }), [camera, scene]);
-  useEffect(() => () => fx.ink.dispose(), [fx]);
+  useEffect(() => () => {
+    if (typeof fx?.ink?.dispose === "function") {
+      try { fx.ink.dispose(); } catch {}
+    }
+  }, [fx]);
   const post = useMemo(() => (
-    <EffectComposer multisampling={4}>
+    <EffectComposer multisampling={0}>
       {on.ink ? <primitive object={fx.ink} dispose={null} /> : null}
       {on.lens && on.pre ? <primitive object={fx.lens.pre} dispose={null} /> : null}
       {on.lens ? <primitive object={fx.lens.main} dispose={null} /> : null}
@@ -95,7 +99,7 @@ const Inner: React.FC<{ id: number; kit: Kit }> = ({ id, kit }) => {
 const dprOverride = () => (getInputProps() as { post?: { dpr?: number } }).post?.dpr;
 const ShotView: React.FC<{ id: number; kit: Kit; alpha: number }> = ({ id, kit, alpha }) => (
   <AbsoluteFill style={{ opacity: alpha }}>
-    <ThreeCanvas width={1080} height={1920} {...(dprOverride() ? { dpr: dprOverride() } : {})} shadows gl={{ antialias: false, stencil: false, powerPreference: "high-performance", toneMappingExposure: 1.0 }}
+    <ThreeCanvas width={1080} height={1920} {...(dprOverride() ? { dpr: dprOverride() } : {})} shadows gl={{ antialias: false, stencil: false, preserveDrawingBuffer: true, powerPreference: "high-performance", toneMappingExposure: 1.0 }}
       camera={{ fov: 40, near: 0.2, far: 1500 }}>
       <Inner id={id} kit={kit} />
     </ThreeCanvas>

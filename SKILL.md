@@ -62,7 +62,7 @@ User rules that apply:
    - `cast.ts`: camera-facing billboards, crowds, effect cards, blinks, walk cycles. All billboards go on the `NOINK` layer.
    - `cardshade.ts`: cards lit by the scene light, no emissive.
 7. **Post** (`Bridge.tsx` + `ink.ts` + `lensblur.ts` + `grade.ts`).
-   - Composer order: ink → lens pre → lens main → bloom → NEUTRAL tone map → grade (MSAA 4).
+   - Composer order: ink → lens pre → lens main → bloom → NEUTRAL tone map → grade (MSAA 0; keep multisampling at 0 to avoid massive CPU buffer bloat).
    - Every pixel parameter scales with output height / 1920.
 8. **Sound** (`~/bridge-short/audio/`: timeline.py, sfx_gen.py, sfx.py, music.py, instruments.py, dsp.py, mix.py).
    - Event table → synthesized SFX plus an original score ducked under the voice.
@@ -152,6 +152,12 @@ lighting 5-6, ink 6, textures 5-6, characters 7, depth 6-7, composition 6-7 (fro
 - Scratch `.ts` files inside `out/` break `tsc`: name them `.txt`.
 - 2K renders run ~4 fps (≈10 min for 67 s). Stills at 0.5 take 3-8 s each after a ~40 s bundle.
 - Film grain at 2.5 % made the 2K file 910 MB instead of ~250 MB and will turn to mush on YouTube; the reference has none. Keep it off.
+- **WebGL Stability & Software/SwiftShader Rendering:**
+  - Always set `preserveDrawingBuffer: true` on `<ThreeCanvas>`'s `gl` prop. Without it, Remotion's frame grabber will periodically grab blank or light blue background (#cfe3f2) frames.
+  - Set `<EffectComposer multisampling={0}>`. 4x MSAA causes huge CPU memory pressure (bloating RAM and swap to 15+ GB) on SwiftShader software rasterizers without visual benefit for flat toon shading.
+  - In `cast.ts`, dispose canvas textures when `Pool` frees items (`dead.tex.dispose()`), preventing unbounded GPU/CPU texture leaks.
+  - Set directional shadow map to 1024x1024 (`sun.shadow.mapSize.set(1024, 1024)`). 4096 is unnecessarily heavy and exhausts memory on CPU rasterizers.
+  - **Chunked Rendering for CPU/Headless Environments:** SwiftShader command buffers leak and degrade after 40–80 continuous frames, causing sudden black frames or shader drops. Chunking renders into 30-frame (1.0 s) slices using a python wrapper and concatenating with `ffmpeg -f concat -c copy` recycles Chromium completely per chunk, preventing memory thrashing and guaranteeing 100% stable results.
 
 ## Readability traps the verifier caught (check every new prop/shot for these)
 - **A swing drawn as one rope that disappears behind the kid reads as a HANGING.** Always two ropes to a wide plank
